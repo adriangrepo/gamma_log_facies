@@ -1,4 +1,5 @@
 examples/
 references/
+catalyst_segmentation/
 .ipynb_checkpoints/
 data/

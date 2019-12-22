@@ -64,7 +64,7 @@ if [[ -z "$IMAGE_SIZE" ]]; then
 fi
 
 if [[ -z "$CONFIG_TEMPLATE" ]]; then
-      CONFIG_TEMPLATE="./configs/templates/binary.yml"
+      CONFIG_TEMPLATE="./configs/templates/semantic.yml"
 fi
 
 if [[ -z "$DATADIR" ]]; then

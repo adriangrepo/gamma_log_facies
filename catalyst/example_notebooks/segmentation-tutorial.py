@@ -82,7 +82,14 @@ is_fp16_used = False
 
 # ## Setting up GPUs
 
-# In[4]:
+# In[2]:
+
+
+import sys
+sys.path
+
+
+# In[3]:
 
 
 from typing import Callable, List, Tuple
@@ -119,7 +126,7 @@ utils.prepare_cudnn(deterministic=True)
 
 download-gdrive 1iYaNijLmzsrMlAdMoUEhhJuo-5bkeAuj segmentation_data.zip
 extract-archive segmentation_data.zip &>/dev/null
-# In[8]:
+# In[4]:
 '''
 
 from pathlib import Path
@@ -131,7 +138,7 @@ train_mask_path = ROOT / "train_masks"
 test_image_path = ROOT / "test"
 
 
-# In[9]:
+# In[5]:
 
 
 train_image_path
@@ -139,21 +146,21 @@ train_image_path
 
 # Collect images and masks into variables.
 
-# In[10]:
+# In[6]:
 
 
 ALL_IMAGES = sorted(train_image_path.glob("*.jpg"))
 len(ALL_IMAGES)
 
 
-# In[11]:
+# In[7]:
 
 
 ALL_MASKS = sorted(train_mask_path.glob("*.gif"))
 len(ALL_MASKS)
 
 
-# In[12]:
+# In[8]:
 
 
 import random
@@ -196,7 +203,7 @@ def show_random(images: List[Path], masks: List[Path], transforms=None) -> None:
 
 # You can restart the cell below to see more examples.
 
-# In[13]:
+# In[9]:
 
 
 show_random(ALL_IMAGES, ALL_MASKS)
@@ -204,7 +211,7 @@ show_random(ALL_IMAGES, ALL_MASKS)
 
 # The dataset below reads images and masks and optionally applies augmentation to them.
 
-# In[14]:
+# In[10]:
 
 
 from typing import List
@@ -229,11 +236,12 @@ class SegmentationDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         image_path = self.images[idx]
         image = utils.imread(image_path)
-        
+        print(f'--__getitem__() image: {image.shape}')
         result = {"image": image}
         
         if self.masks is not None:
             mask = gif_imread(self.masks[idx])
+            print(f'--__getitem__() mask: {mask.shape}')
             result["mask"] = mask
         
         if self.transforms is not None:
@@ -252,7 +260,7 @@ class SegmentationDataset(Dataset):
 # 
 # The [albumentation](https://github.com/albu/albumentations) library works with images and masks at the same time, which is what we need.
 
-# In[15]:
+# In[11]:
 
 
 import albumentations as albu
@@ -323,23 +331,28 @@ def compose(transforms_to_compose):
     return result
 
 
-# In[16]:
+# In[12]:
 
 
+train_transforms = compose([
+    post_transforms(),
+])
+valid_transforms = compose([pre_transforms(),post_transforms()])
+'''
 train_transforms = compose([
     resize_transforms(), 
     hard_transforms(), 
     post_transforms()
 ])
 valid_transforms = compose([pre_transforms(), post_transforms()])
-
+'''
 show_transforms = compose([resize_transforms(), hard_transforms()])
 
 
 # Let's look at the augmented results. <br/>
 # You can restart the cell below to see more examples of augmentations.
 
-# In[17]:
+# In[13]:
 
 
 show_random(ALL_IMAGES, ALL_MASKS, transforms=show_transforms)
@@ -349,7 +362,7 @@ show_random(ALL_IMAGES, ALL_MASKS, transforms=show_transforms)
 
 # ## Loaders
 
-# In[18]:
+# In[14]:
 
 
 import collections
@@ -417,7 +430,7 @@ def get_loaders(
     return loaders
 
 
-# In[19]:
+# In[15]:
 
 
 if is_fp16_used:
@@ -450,7 +463,7 @@ loaders = get_loaders(
 # 
 # [![Segmentation Models logo](https://raw.githubusercontent.com/qubvel/segmentation_models.pytorch/master/pics/logo-small-w300.png)](https://github.com/qubvel/segmentation_models.pytorch)
 
-# In[21]:
+# In[16]:
 
 
 import segmentation_models_pytorch as smp
@@ -469,7 +482,7 @@ model = smp.FPN(encoder_name="resnext50_32x4d", classes=1, aux_params=aux_params
 # We will optimize loss as the sum of IoU, Dice and BCE, specifically this function: $IoU + Dice + 0.8*BCE$.
 # 
 
-# In[22]:
+# In[17]:
 
 
 from torch import nn
@@ -484,7 +497,7 @@ criterion = {
 }
 
 
-# In[23]:
+# In[18]:
 
 
 from torch import optim
@@ -507,7 +520,7 @@ optimizer = Lookahead(base_optimizer)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.25, patience=2)
 
 
-# In[24]:
+# In[19]:
 
 
 from catalyst.dl import SupervisedRunner
@@ -535,7 +548,7 @@ runner = SupervisedRunner(device=device, input_key="image", input_target_key="ma
 
 # If you do not have a Tensorboard opened after you have run the cell below, try running the cell again.
 
-# In[25]:
+# In[20]:
 
 
 #get_ipython().run_line_magic('load_ext', 'tensorboard')
@@ -544,7 +557,7 @@ runner = SupervisedRunner(device=device, input_key="image", input_target_key="ma
 
 # ### Running train-loop
 
-# In[26]:
+# In[22]:
 
 
 from catalyst.dl.callbacks import DiceCallback, IouCallback,   CriterionCallback, CriterionAggregatorCallback
@@ -627,7 +640,7 @@ runner.train(
 # Let's look at model predictions.
 # 
 
-# In[ ]:
+# In[21]:
 
 
 TEST_IMAGES = sorted(test_image_path.glob("*.jpg"))
@@ -659,7 +672,7 @@ print(type(predictions))
 print(predictions.shape)
 
 
-# In[ ]:
+# In[22]:
 
 
 threshold = 0.5
@@ -692,7 +705,7 @@ batch = next(iter(loaders["valid"]))
 # saves to `logdir` and returns a `ScriptModule` class
 runner.trace(model=model, batch=batch, logdir=logdir, fp16=is_fp16_used)
 
-get_ipython().system('ls {logdir}/trace/')
+#get_ipython().system('ls {logdir}/trace/')
 
 
 # After this, you can easily load the model and predict anything!

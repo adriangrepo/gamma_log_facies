@@ -2,3 +2,5 @@ data/
 logs/
 catalyst/
 .ipynb_checkpoints/
+segmentation-models-pytorch-catalyst.ipynb
+segmentation-example.ipynb
