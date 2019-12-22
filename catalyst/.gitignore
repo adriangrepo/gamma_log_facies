@@ -4,3 +4,6 @@ catalyst/
 .ipynb_checkpoints/
 segmentation-models-pytorch-catalyst.ipynb
 segmentation-example.ipynb
+example_notebooks/
+None/
+Catalyst-CamVid-Segmentation-Example/

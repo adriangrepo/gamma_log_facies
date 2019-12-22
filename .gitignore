@@ -3,3 +3,5 @@ references/
 catalyst_segmentation/
 .ipynb_checkpoints/
 data/
+__pycache__/
+.idea/
