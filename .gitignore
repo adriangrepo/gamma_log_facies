@@ -5,3 +5,4 @@ catalyst_segmentation/
 data/
 __pycache__/
 .idea/
+.data/
