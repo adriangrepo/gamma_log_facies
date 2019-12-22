@@ -24,6 +24,10 @@ see
 
 /mnt/963GB/Data/Python/Courses/my_fastai/my_fastai_v3/nbs/lesson3-camvid-tiramisu_gpu0.ipynb
 
+count files in folder 
+
+ls -l . | egrep -c '^-'
+
 
 
 

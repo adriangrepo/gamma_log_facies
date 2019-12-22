@@ -73,7 +73,7 @@ import pywt
 from pathlib import Path
 from scipy.ndimage import map_coordinates
 import psutil
-from memory_profiler import profile
+
 
 
 
@@ -106,9 +106,9 @@ def show_mem_usage():
 print(show_mem_usage())
 
 
-data_dir = Path('data')
+data_dir = Path('../data')
 
-data_images = Path('data/train_images')
+data_images = data_dir/'test_images'
 
 GR_MAX=190
 DPI=54
@@ -118,14 +118,21 @@ IMG_HEIGHT=256
 # figsize=((IMG_HEIGHT*4)/51.905454545, IMG_HEIGHT/50.487272727)
 
 # 1100 x 275
-FIGSIZE = ((IMG_HEIGHT * 4) / 72.101395041, IMG_HEIGHT / 71.600132231)
+#FIGSIZE = ((IMG_HEIGHT * 4) / 72.101395041, IMG_HEIGHT / 71.600132231)
+
+# 1100 x 256
+#W_SCALAR=72.101395041 #2201
+W_SCALAR=72.13
+H_SCALAR=76.914204538
+#FIGSIZE = ((IMG_HEIGHT * 4) / W_SCALAR, IMG_HEIGHT / H_SCALAR)
+FIGSIZE = ((IMG_HEIGHT * 8) / W_SCALAR, (IMG_HEIGHT*2) / H_SCALAR)
 
 set_option("display.max_rows", 10)
 pd.options.mode.chained_assignment = None
 
-filename = 'data/CAX_LogFacies_Train_File.csv'
+filename = data_dir/'CAX_LogFacies_Test_File.csv'
 training_data = pd.read_csv(filename)
-TRAIN_DATA=True
+TRAIN_DATA=False
 
 
 training_data.info()
@@ -162,6 +169,8 @@ facies_colors = ['#6E2C00','#DC7633','#F4D03F',
 #      0=shale   1=mixed1  2=sst   3=mixed2 4=mixed3
 ccc = ['#996633','blue','yellow','red','green']
 cmap_facies = colors.ListedColormap(ccc[0:len(ccc)], 'indexed')
+#just use a mpl one instead as had no end of issues with plt.vlines with ListedColormap
+cmap_facies = plt.get_cmap('tab20')
 
 
 
@@ -215,14 +224,22 @@ def plot_well(well):
 
 
 
-@profile
-def plot_facies(well, figsize=(18, 8), repeat=100, save_name=None):
+
+def plot_facies(well, figsize, repeat=100, save_name=None):
     cluster=np.repeat(np.expand_dims(well['label'].values,1), repeat, 1)
     rotated_img = ndimage.rotate(cluster, 90)
 
     if save_name:
+        #plt.rcParams["figure.figsize"] = figsize
+        figsize = ((IMG_HEIGHT * 8) / W_SCALAR, (IMG_HEIGHT * 2) / H_SCALAR*1.1)
         plt.rcParams["figure.figsize"] = figsize
-        plt.imsave(f'{save_name}.png', rotated_img,cmap=cmap_facies,vmin=0,vmax=4)
+        #print(f'plot_facies figsize: {figsize}')
+        #plt.imsave(f'{save_name}.png', rotated_img,cmap=cmap_facies,vmin=0,vmax=4)
+        plt.imshow(rotated_img,cmap=cmap_facies,vmin=0,vmax=4)
+        plt.set_cmap(cmap_facies)
+        plt.clim(vmin=0, vmax=4)
+        plt.axis('off')
+        plt.savefig(fname=f'{save_name}.png', transparent = False, bbox_inches = 'tight', pad_inches = 0)
         del rotated_img, cluster
         plt.close()
     else:
@@ -230,7 +247,7 @@ def plot_facies(well, figsize=(18, 8), repeat=100, save_name=None):
 
 
 
-@profile
+
 def plot_signal(time, signal, figsize=(18, 4), save_name=None):
     plt.rcParams["figure.figsize"] = figsize
     plt.plot(time, signal, color='k')
@@ -263,7 +280,56 @@ def y_trend(signal, N=15):
     y_delta_trend=delta_signal(y)
     return y_delta_trend
 
+def axvlines(xs, ax=None, **plot_kwargs):
+    """
+    after https://stackoverflow.com/questions/24988448/how-to-draw-vertical-lines-on-a-given-plot-in-matplotlib
+    Draw vertical lines on plot
+    :param xs: A scalar, list, or 1D array of horizontal offsets
+    :param ax: The axis (or none to use gca)
+    :param plot_kwargs: Keyword arguments to be passed to plot
+    :return: The plot object corresponding to the lines.
+    """
+    if ax is None:
+        ax = plt.gca()
+    xs = np.array((xs, ) if np.isscalar(xs) else xs, copy=False)
+    lims = ax.get_ylim()
+    x_points = np.repeat(xs[:, None], repeats=1, axis=1).flatten()
+    y_points = np.repeat(np.array(lims + (np.nan, ))[None, :], repeats=len(xs), axis=0).flatten()
+    plot = ax.plot(x_points, y_points, scaley = False, **plot_kwargs)
+    return plot
 
+def vlines(x_pos, y1, y2, c, cmap_name):
+    '''Hack so that we dont get errors with cmap not found'''
+    mpl.rcParams['image.cmap']=cmap_name
+    plt.vlines(x_pos, ymin=y1, ymax=y2, color=c, linewidth=1/H_SCALAR,
+           antialiased=False, cmap=cmap_name)
+
+def rainbow_lines(X, Y, trend_len, cmaps=['Blues_r', 'Reds_r']):
+    '''Option for one or two cmpas per plot'''
+    if len(cmaps) == 1:
+        cmap = plt.get_cmap(cmaps[0])
+    else:
+        cmap_1 = plt.get_cmap(cmaps[0])
+        cmap_2 = plt.get_cmap(cmaps[1])
+    plt.plot(X, Y, lw=0)  # Plot so the axes scale correctly, lw=linewidth
+    plt.xlim([X[0], X[-1]])
+    plt.ylim([0, GR_MAX])
+    dx = X[1] - X[0]
+    N = float(len(X))
+
+    ydeltas = y_trend(Y, trend_len)
+    cmap_name='jet'
+    for n, (x, y, yd) in enumerate(zip(X, Y, ydeltas)):
+        if len(cmaps) == 1:
+            color = cmap(y / GR_MAX)
+        else:
+            if yd > 0:
+                color = cmap_1(y / GR_MAX)
+                cmap_name='Blues_r'
+            else:
+                color = cmap_2(y / GR_MAX)
+                cmap_name = 'Reds_r'
+        vlines(x, y1=0, y2=y, c=color, cmap_name=cmap_name)
 
 
 def rect(x,y,w,h,c):
@@ -271,7 +337,7 @@ def rect(x,y,w,h,c):
     polygon = plt.Rectangle((x,y),w,h,color=c, antialiased=False)
     ax.add_patch(polygon)
 
-@profile
+
 def rainbow_fill(X,Y, trend_len, cmaps=['Blues_r','Reds_r']):
     '''Option for one or two cmpas per plot'''
     if len(cmaps)==1:
@@ -283,10 +349,7 @@ def rainbow_fill(X,Y, trend_len, cmaps=['Blues_r','Reds_r']):
     plt.xlim([X[0], X[-1]])
     plt.ylim([0, GR_MAX])
     dx = X[1]-X[0]
-    N  = float(len(X))
-    
     ydeltas=y_trend(Y, trend_len)
-
     for n, (x,y, yd) in enumerate(zip(X,Y, ydeltas)):
         if len(cmaps)==1:
             color = cmap(y/GR_MAX)
@@ -299,22 +362,27 @@ def rainbow_fill(X,Y, trend_len, cmaps=['Blues_r','Reds_r']):
 
 def mask_fill(X,Y, facies, cmap='Set1'):
     '''Option for one or two cmpas per plot'''
-    #facies=well['label'].values
     cmap=cmap_facies
-    #plt.get_cmap(cmap)
-
     plt.plot(X,Y,lw=0)  # Plot so the axes scale correctly, lw=linewidth
     plt.xlim([X[0], X[-1]])
     plt.ylim([0, GR_MAX])
     dx = X[1]-X[0]
-    N  = float(len(X))
-    #some wells dont have all 5 facies
-    #assert(len(list(set(facies))))==5
     for n, (x,y, f) in enumerate(zip(X,Y, facies)):
         color = cmap(f)
         rect(x,0,dx,y,color)
 
-@profile
+def mask_line_fill(X,Y, facies, cmap='Set1'):
+    #cmap=cmap_facies
+    cmap = plt.get_cmap('tab20')
+    cmap_name='tab20'
+    plt.plot(X,Y,lw=0)
+    plt.xlim([X[0], X[-1]])
+    plt.ylim([0, GR_MAX])
+    for n, (x,y, f) in enumerate(zip(X,Y, facies)):
+        color = cmap(f)
+        vlines(x, y1=0, y2=y, c=color, cmap_name=cmap_name)
+
+
 def fill_signal(time, signal, figsize=(18, 4), save_name=None):
     fig, ax = plt.subplots()
     fig.set_size_inches(figsize)
@@ -331,8 +399,17 @@ def fill_signal(time, signal, figsize=(18, 4), save_name=None):
         plt.close()
 
 
+def rainbow_lines_signal(time, signal, trend_len, figsize=(18, 4), cmaps=['jet'], save_name=None):
+    plt.rcParams["figure.figsize"] = figsize
+    rainbow_lines(time, signal, trend_len, cmaps)
+    if save_name:
+        plt.axis('off')
+        spec = plt.imshow
+        plt.savefig(f'{save_name}.png', transparent = False, bbox_inches = 'tight', pad_inches = 0)
+        del spec
+        plt.close()
 
-@profile
+
 def rainbow_signal(time, signal, trend_len, figsize=(18, 4), cmaps=['jet'], save_name=None):
     plt.rcParams["figure.figsize"] = figsize
     rainbow_fill(time, signal, trend_len, cmaps)
@@ -357,9 +434,22 @@ def masked_signal(time, signal, facies, figsize=(18, 4), cmap='Set1', save_name=
         #del spec
         plt.close()
 
+def masked_line_signal(time, signal, facies, figsize=(18, 4), cmap='Set1', save_name=None, dpi=None):
+    plt.rcParams["figure.figsize"] = figsize
+    mask_line_fill(time, signal, facies, cmap)
+    if save_name:
+        plt.axis('off')
+        #spec = plt.imshow
+        if dpi:
+            plt.savefig(f'{save_name}.png', transparent = False, bbox_inches = 'tight', pad_inches = 0, dpi=dpi)
+        else:
+            plt.savefig(f'{save_name}.png', transparent = False, bbox_inches = 'tight', pad_inches = 0)
+        #del spec
+        plt.close()
 
 
-@profile
+
+
 def plot_wavelet(ax, time, signal, scales, waveletname = 'cmor', 
                  cmap = plt.cm.Spectral, title = '', ylabel = '', xlabel = ''):
     
@@ -594,12 +684,12 @@ print('memory use:', memoryUse)
 
 
 def create_mask_plots(facies_data, gr_data, data_images, i, figsize, smth_y):
-    masked_signal(range(len(smth_y)), smth_y, facies_data, figsize=figsize, cmap='Set1',
-                  save_name=f'{data_images}/well_{i}_smth_5_masked')
-    masked_signal(range(len(gr_data)), gr_data, facies_data, figsize=figsize, cmap='Set1',
-                  save_name=f'{data_images}/well_{i}_masked')
+    #masked_signal(range(len(smth_y)), smth_y, facies_data, figsize=figsize, cmap='Set1',
+    #              save_name=f'{data_images}/well_{i}_smth_5_masked')
+    masked_line_signal(range(len(gr_data)), gr_data, facies_data, figsize=figsize, cmap='Set1',
+                  save_name=f'{data_images}/well_{i}_2200_masked')
 
-@profile
+
 def plot_wells_mask(well_ids):
     '''Note use of epsolin sclars to the DPI to exactly match the image size of the facies image 1100x275
     Couldn't work out how to get mpl to imsave to a specific size'''
@@ -625,14 +715,8 @@ def plot_wells_mask(well_ids):
 
 
 well_ids=training_data.well_id.unique().tolist()
-well_ids_cut=well_ids[3700:]
 #well_ids_cut=well_ids_cut[::-1]
-plot_wells_mask(well_ids_cut)
-
-
-
-
-
+#plot_wells_mask(well_ids)
 
 
 
@@ -643,19 +727,23 @@ def create_smooth_plots(time, well, gr_data, data_images, i, figsize, smth_y, sm
     rainbow_signal(range(len(smth_y)), smth_y, trend_len=20, figsize=figsize, cmaps=['Blues_r', 'Reds_r'],
                    save_name=f'{data_images}/well_{i}_GRsmth_{smoother}')
 
-#@profile
+#
 def create_basic_plots(time, well, gr_data, data_images, i, figsize, smth_y=None):
     if TRAIN_DATA:
-        plot_facies(well, figsize, repeat=int(len(gr_data) / 4), save_name=f'{data_images}/well_{i}_facies')
-    plot_signal(range(len(gr_data)), gr_data, figsize=figsize, save_name=f'{data_images}/well_{i}_GR_line')
-    #rainbow_signal(time, gr_data, trend_len=20, figsize=figsize, cmaps=['Blues_r', 'Reds_r'],
-    #               save_name=f'{data_images}/well_{i}_GR')
+        name = f'{data_images}/well_{i}_2200_facies'
+        print(f'create_basic_plots: {name}')
+        plot_facies(well, figsize, repeat=int(len(gr_data) / 4), save_name=name)
+    #plot_signal(range(len(gr_data)), gr_data, figsize=figsize, save_name=f'{data_images}/well_{i}_GR_line')
+    rainbow_lines_signal(time, gr_data, trend_len=20, figsize=figsize, cmaps=['Blues_r', 'Reds_r'],
+                   save_name=f'{data_images}/well_{i}_2200_GR')
+
 
 
 def plot_wells_basic(well_ids):
     '''Note use of epsolin sclars to the DPI to exactly match the image size of the facies image 1100x275
     Couldn't work out how to get mpl to imsave to a specific size'''
-    figsize=((IMG_HEIGHT*4)/51.905454545, IMG_HEIGHT/50.487272727)
+    #figsize=((IMG_HEIGHT*4)/51.905454545, IMG_HEIGHT/50.487272727)
+    figsize=FIGSIZE
     print(f'figsize: {figsize}')
     for i in well_ids:
         if (i % 10)==0:
@@ -674,7 +762,7 @@ def plot_wells_basic(well_ids):
 
 
 
-#plot_wells_basic(well_ids)
+plot_wells_basic(well_ids)
 
 
 
