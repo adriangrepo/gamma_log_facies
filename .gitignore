@@ -6,3 +6,7 @@ data/
 __pycache__/
 .idea/
 .data/
+/data
+env.txt
+Methodology.odt
+TODO.txt

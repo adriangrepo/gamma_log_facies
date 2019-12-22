@@ -1,4 +1,5 @@
 data/
+/catalyst
 logs/
 catalyst/
 .ipynb_checkpoints/
